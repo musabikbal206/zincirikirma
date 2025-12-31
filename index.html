@@ -1,0 +1,937 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Zinciri Kırma 2026</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- D3.js for Voronoi Math -->
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <!-- Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,400;0,600;0,700;0,800;0,900;1,400;1,600;1,700;1,800;1,900&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        brand: {
+                            50: '#eff6ff',
+                            100: '#dbeafe',
+                            500: '#3b82f6',
+                            600: '#2563eb',
+                            900: '#1e3a8a',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body {
+            background-color: #ffffff;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        /* Voronoi Cell Interactions */
+        .voronoi-cell-path {
+            transition: d 0.3s ease, fill 0.2s ease;
+        }
+        
+        /* Only allow hover/pointer on today's cell */
+        .voronoi-cell-path.is-today {
+            cursor: pointer;
+        }
+        @media (hover: hover) {
+            .voronoi-cell-path.is-today:hover {
+                filter: brightness(0.95);
+            }
+        }
+        
+        .voronoi-cell-path.is-locked {
+            cursor: not-allowed;
+            opacity: 0.9; /* Slight visual cue */
+        }
+        
+        /* Mobile Drawer Transition */
+        .drawer {
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .drawer-overlay {
+            transition: opacity 0.3s ease;
+        }
+
+        /* Hide Scrollbar but allow scroll */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+        
+        /* Sidebar Item Styles */
+        .goal-item {
+            transition: all 0.2s;
+        }
+        .goal-item:hover {
+            transform: translateX(4px);
+        }
+    </style>
+</head>
+<body class="h-[100dvh] w-screen overflow-hidden flex text-slate-700 font-sans">
+
+    <!-- MOBILE OVERLAY & DRAWER (Sidebar) -->
+    <div id="drawerOverlay" onclick="toggleDrawer(false)" class="fixed inset-0 bg-slate-900/50 z-40 opacity-0 pointer-events-none drawer-overlay backdrop-blur-sm lg:hidden"></div>
+    
+    <aside id="appDrawer" class="fixed lg:static inset-y-0 left-0 w-[300px] bg-white border-r border-slate-200 z-50 transform -translate-x-full lg:translate-x-0 drawer flex flex-col shadow-2xl lg:shadow-none h-full shrink-0">
+        <div class="p-8 border-b border-slate-100 flex items-center justify-between">
+            <div>
+                <h1 class="text-3xl font-extrabold text-slate-800 tracking-tight leading-none">ZİNCİRİ<br><span class="text-indigo-600">KIRMA 2026</span></h1>
+                <p class="text-xs text-slate-400 font-semibold tracking-widest mt-2 uppercase">Yıllık Görünüm</p>
+            </div>
+            <button onclick="toggleDrawer(false)" class="lg:hidden text-slate-400 hover:text-slate-600">
+                <i data-lucide="x" class="w-6 h-6"></i>
+            </button>
+        </div>
+
+        <div class="p-4 flex-1 overflow-hidden flex flex-col">
+            <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 px-2">Hedeflerim</h3>
+            <div id="goalsList" class="flex-1 overflow-y-auto space-y-2 no-scrollbar pb-4">
+                <!-- Goal Items injected here -->
+            </div>
+        </div>
+
+        <div class="p-6 border-t border-slate-100 bg-slate-50 flex flex-col gap-3">
+            <button onclick="addNewGoal()" class="w-full py-3.5 border-2 border-dashed border-slate-300 rounded-xl text-slate-500 hover:border-indigo-600 hover:text-indigo-600 hover:bg-white transition-all flex items-center justify-center gap-2 font-bold group">
+                <span class="bg-slate-200 text-slate-600 rounded-md w-5 h-5 flex items-center justify-center text-sm group-hover:bg-indigo-600 group-hover:text-white transition-colors">+</span> 
+                Yeni Hedef
+            </button>
+            
+            <!-- REFERENCE BUTTON -->
+            <button onclick="openInfoModal()" class="w-full py-2 text-xs font-bold text-slate-400 hover:text-slate-600 transition-colors flex items-center justify-center gap-2">
+                <i data-lucide="info" class="w-3 h-3"></i>
+                Proje Hakkında & Referanslar
+            </button>
+        </div>
+    </aside>
+
+    <!-- MAIN CONTENT -->
+    <main class="flex-1 flex flex-col relative h-full min-w-0 bg-white">
+        
+        <!-- HEADER -->
+        <header class="bg-white border-b border-slate-200 px-4 py-3 lg:px-8 lg:py-5 sticky top-0 z-30 flex flex-col md:flex-row items-start md:items-center gap-4 justify-between shrink-0 shadow-sm">
+            <div class="flex items-center gap-3 w-full md:w-auto">
+                <button onclick="toggleDrawer(true)" class="lg:hidden p-2 -ml-2 text-slate-500 hover:bg-slate-100 rounded-lg transition-colors">
+                    <i data-lucide="menu" class="w-6 h-6"></i>
+                </button>
+                
+                <div id="headerTitleContainer" class="flex-1">
+                    <h2 id="currentGoalTitle" class="text-lg lg:text-2xl font-black text-slate-800 tracking-tight truncate max-w-[200px] lg:max-w-md">Yükleniyor...</h2>
+                    <div class="flex items-center gap-2 text-xs lg:text-sm text-slate-500 mt-1 font-medium">
+                        <span id="completedCount" class="bg-indigo-50 text-indigo-700 px-2.5 py-0.5 rounded text-xs font-bold uppercase tracking-wide">0 Gün</span>
+                        <span class="opacity-80">kaydedildi</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Desktop Mood Palette (Hidden on Mobile) -->
+            <div class="hidden md:flex flex-wrap justify-end gap-1.5 bg-slate-100 p-1.5 rounded-lg max-w-2xl" id="desktopMoodPalette">
+                <!-- Colors injected here -->
+            </div>
+        </header>
+
+        <!-- SCROLLABLE GRID -->
+        <div class="flex-1 overflow-y-auto overflow-x-hidden p-4 lg:p-10 pb-24 lg:pb-10 scroll-smooth" id="mainScrollArea">
+            <div id="yearGrid" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8 max-w-[1400px] mx-auto pb-20">
+                <!-- Months injected here -->
+            </div>
+        </div>
+
+        <!-- MOBILE BOTTOM MOOD BAR (Visible only on mobile) -->
+        <div class="md:hidden absolute bottom-6 left-4 right-4 z-30">
+            <div class="bg-white/95 backdrop-blur-xl border border-slate-200 shadow-xl p-3 rounded-2xl flex justify-between items-center gap-2 overflow-x-auto no-scrollbar" id="mobileMoodPalette">
+                <!-- Mobile colors injected here -->
+            </div>
+        </div>
+    </main>
+    
+    <!-- NEW GOAL MODAL -->
+    <div id="newGoalModal" class="fixed inset-0 z-50 flex items-center justify-center opacity-0 pointer-events-none transition-opacity duration-300">
+        <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onclick="closeNewGoalModal()"></div>
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 p-6 relative z-10 transform scale-95 transition-transform duration-300" id="newGoalCard">
+            <div class="flex items-center justify-between mb-2">
+                <h3 class="text-xl font-bold text-slate-800">Yeni Zincir Başlat</h3>
+                <button onclick="closeNewGoalModal()" class="text-slate-400 hover:text-slate-600 transition-colors">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <p class="text-sm text-slate-500 mb-6 font-medium">Her gün tekrarlamak istediğin bir alışkanlık seç ve zinciri kırma.</p>
+            
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Alışkanlık Adı</label>
+                    <input type="text" id="newGoalInput" placeholder="Örn: Kitap Okuma, Yürüyüş..." 
+                        class="w-full px-4 py-3 rounded-xl border-2 border-slate-100 text-slate-700 font-bold focus:outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all placeholder:text-slate-300 placeholder:font-medium"
+                        onkeypress="handleEnter(event)">
+                </div>
+                
+                <div class="flex gap-3 pt-2">
+                    <button onclick="closeNewGoalModal()" class="flex-1 py-3 rounded-xl font-bold text-slate-500 hover:bg-slate-50 border border-transparent hover:border-slate-200 transition-all">İptal</button>
+                    <button onclick="confirmAddGoal()" class="flex-1 py-3 rounded-xl font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-200 hover:shadow-indigo-300 hover:-translate-y-0.5 active:translate-y-0 transition-all">Oluştur</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- INFO MODAL -->
+    <div id="infoModal" class="fixed inset-0 z-50 flex items-center justify-center opacity-0 pointer-events-none transition-opacity duration-300">
+        <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onclick="closeInfoModal()"></div>
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden relative z-10 transform scale-95 transition-transform duration-300" id="infoCard">
+            <!-- Modal Header -->
+            <div class="bg-slate-50 p-6 border-b border-slate-100 flex justify-between items-center">
+                <h3 class="text-lg font-black text-slate-800 tracking-tight">PROJE HAKKINDA</h3>
+                <button onclick="closeInfoModal()" class="text-slate-400 hover:text-slate-600 transition-colors">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            
+            <!-- Modal Content -->
+            <div class="p-6 space-y-6">
+                <!-- Developer Info -->
+                <div class="flex items-center gap-4 bg-indigo-50 p-4 rounded-xl border border-indigo-100">
+                    <div class="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 shrink-0">
+                        <i data-lucide="code-2" class="w-5 h-5"></i>
+                    </div>
+                    <div>
+                        <p class="text-xs font-bold text-indigo-400 uppercase tracking-wider mb-0.5">Geliştirici & Uyarlama</p>
+                        <p class="text-sm font-bold text-slate-800">Musab İkbal SUBAŞI</p>
+                    </div>
+                </div>
+
+                <!-- Description -->
+                <div class="text-sm text-slate-600 leading-relaxed font-medium">
+                    <p class="mb-3">
+                        Bu uygulama, <strong>Barış Özcan</strong>'ın popülerleştirdiği <span class="text-slate-900 font-bold">"Zinciri Kırma"</span> metodolojisi ve 2025 Voronoi Takvimi konsepti temel alınarak geliştirilmiştir.
+                    </p>
+                    <p>
+                        Her gün küçük bir adım atarak büyük hedeflere ulaşmanızı sağlayan görsel bir motivasyon aracıdır.
+                    </p>
+                </div>
+
+                <!-- Reference Links -->
+                <div class="space-y-2">
+                    <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Referanslar & Kaynaklar</p>
+                    
+                    <a href="https://www.youtube.com/watch?v=esvaeYNLLxQ&t=2s" target="_blank" class="flex items-center gap-3 p-3 rounded-lg hover:bg-slate-50 border border-slate-100 hover:border-red-200 transition-all group">
+                        <div class="w-8 h-8 rounded-full bg-red-50 flex items-center justify-center text-red-600 group-hover:bg-red-100 transition-colors">
+                            <i data-lucide="youtube" class="w-4 h-4"></i>
+                        </div>
+                        <span class="text-sm font-semibold text-slate-700 group-hover:text-red-600 transition-colors">Barış Özcan - Zinciri Kırma Videosu</span>
+                        <i data-lucide="external-link" class="w-3 h-3 text-slate-300 ml-auto"></i>
+                    </a>
+
+                    <a href="https://barisozcan.com/voronoi-takvimi/" target="_blank" class="flex items-center gap-3 p-3 rounded-lg hover:bg-slate-50 border border-slate-100 hover:border-blue-200 transition-all group">
+                        <div class="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center text-blue-600 group-hover:bg-blue-100 transition-colors">
+                            <i data-lucide="globe" class="w-4 h-4"></i>
+                        </div>
+                        <span class="text-sm font-semibold text-slate-700 group-hover:text-blue-600 transition-colors">Voronoi Takvimi</span>
+                        <i data-lucide="external-link" class="w-3 h-3 text-slate-300 ml-auto"></i>
+                    </a>
+
+                    <a href="https://barisozcan.com/zinciri-kirma/" target="_blank" class="flex items-center gap-3 p-3 rounded-lg hover:bg-slate-50 border border-slate-100 hover:border-emerald-200 transition-all group">
+                        <div class="w-8 h-8 rounded-full bg-emerald-50 flex items-center justify-center text-emerald-600 group-hover:bg-emerald-100 transition-colors">
+                            <i data-lucide="link" class="w-4 h-4"></i>
+                        </div>
+                        <span class="text-sm font-semibold text-slate-700 group-hover:text-emerald-600 transition-colors">Zinciri Kırma Metodu</span>
+                        <i data-lucide="external-link" class="w-3 h-3 text-slate-300 ml-auto"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- ICONS ---
+        lucide.createIcons();
+
+        // --- CONFIGURATION ---
+        const MONTHS = ["OCAK", "ŞUBAT", "MART", "NİSAN", "MAYIS", "HAZİRAN", "TEMMUZ", "AĞUSTOS", "EYLÜL", "EKİM", "KASIM", "ARALIK"];
+        const DAYS_IN_MONTH = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+        
+        // Expanded Palette
+        const MOODS = [
+            { id: 'perfect',    color: '#8b5cf6', label: 'Harika' },   // Violet
+            { id: 'happy',      color: '#ec4899', label: 'Mutlu' },    // Pink
+            { id: 'good',       color: '#3b82f6', label: 'İyi' },      // Blue
+            { id: 'relaxed',    color: '#06b6d4', label: 'Sakin' },    // Cyan
+            { id: 'okay',       color: '#10b981', label: 'Orta' },     // Emerald
+            { id: 'productive', color: '#84cc16', label: 'Üretken' },  // Lime
+            { id: 'tired',      color: '#f59e0b', label: 'Yorgun' },   // Amber
+            { id: 'anxious',    color: '#f97316', label: 'Endişeli' }, // Orange
+            { id: 'bad',        color: '#ef4444', label: 'Kötü' },     // Red
+            { id: 'angry',      color: '#e11d48', label: 'Kızgın' },   // Rose
+            { id: 'bored',      color: '#64748b', label: 'Sıkkın' },   // Slate
+            { id: 'empty',      color: '#e5e7eb', label: 'Boş' }       // Gray-200
+        ];
+        
+        let goals = JSON.parse(localStorage.getItem('voronoiGoalsV2')) || [
+            { id: Date.now(), title: "Kitap Okuma", data: {} }
+        ];
+        let currentGoalId = goals[0].id;
+        let selectedMood = MOODS[0];
+        
+        // RECOVER STATE FROM STORAGE
+        let storedView = localStorage.getItem('voronoiViewedMonth');
+        let viewedMonthIndex = storedView ? parseInt(storedView) : null; 
+        
+        const TEXT_COLOR = '#78716c'; 
+        let voronoiCache = {}; 
+
+        // Initialize
+        window.onload = () => {
+            const year = new Date().getFullYear();
+            // Leap year check
+            if ((year % 4 === 0 && year % 100 !== 0) || year % 400 === 0) {
+                DAYS_IN_MONTH[1] = 29;
+            }
+            
+            renderSidebar();
+            renderMoodPalettes();
+            setTimeout(() => renderYearGrid(), 50);
+        };
+
+        // --- UI ACTIONS ---
+        function toggleDrawer(show) {
+            const drawer = document.getElementById('appDrawer');
+            const overlay = document.getElementById('drawerOverlay');
+            
+            if (show) {
+                overlay.classList.remove('opacity-0', 'pointer-events-none');
+                drawer.classList.remove('-translate-x-full');
+            } else {
+                overlay.classList.add('opacity-0', 'pointer-events-none');
+                drawer.classList.add('-translate-x-full');
+            }
+        }
+
+        function openMonth(index) {
+            viewedMonthIndex = index;
+            // SAVE STATE
+            localStorage.setItem('voronoiViewedMonth', index);
+            renderYearGrid();
+        }
+
+        function closeMonth() {
+            viewedMonthIndex = null;
+            // CLEAR STATE
+            localStorage.removeItem('voronoiViewedMonth');
+            renderYearGrid();
+        }
+        
+        // --- NEW GOAL MODAL FUNCTIONS ---
+        function addNewGoal() {
+            const modal = document.getElementById('newGoalModal');
+            const card = document.getElementById('newGoalCard');
+            const input = document.getElementById('newGoalInput');
+            
+            modal.classList.remove('opacity-0', 'pointer-events-none');
+            card.classList.remove('scale-95');
+            card.classList.add('scale-100');
+            
+            input.value = '';
+            if(window.innerWidth < 1024) toggleDrawer(false);
+            
+            setTimeout(() => input.focus(), 100);
+        }
+
+        function closeNewGoalModal() {
+            const modal = document.getElementById('newGoalModal');
+            const card = document.getElementById('newGoalCard');
+            
+            modal.classList.add('opacity-0', 'pointer-events-none');
+            card.classList.remove('scale-100');
+            card.classList.add('scale-95');
+        }
+
+        function confirmAddGoal() {
+            const input = document.getElementById('newGoalInput');
+            const t = input.value.trim();
+            
+            if(t) {
+                const newG = { id: Date.now(), title: t, data: {} };
+                goals.push(newG);
+                currentGoalId = newG.id;
+                saveGoals();
+                renderSidebar();
+                renderYearGrid();
+                
+                closeNewGoalModal();
+            } else {
+                input.classList.add('border-red-500', 'ring-red-500/20');
+                setTimeout(() => input.classList.remove('border-red-500', 'ring-red-500/20'), 500);
+            }
+        }
+
+        function handleEnter(e) {
+            if(e.key === 'Enter') confirmAddGoal();
+        }
+
+        // --- INFO MODAL FUNCTIONS ---
+        function openInfoModal() {
+            const modal = document.getElementById('infoModal');
+            const card = document.getElementById('infoCard');
+            modal.classList.remove('opacity-0', 'pointer-events-none');
+            card.classList.remove('scale-95');
+            card.classList.add('scale-100');
+            if(window.innerWidth < 1024) toggleDrawer(false);
+        }
+
+        function closeInfoModal() {
+            const modal = document.getElementById('infoModal');
+            const card = document.getElementById('infoCard');
+            modal.classList.add('opacity-0', 'pointer-events-none');
+            card.classList.remove('scale-100');
+            card.classList.add('scale-95');
+        }
+
+        // --- VORONOI MATH ---
+        function mulberry32(a) {
+            return function() {
+              var t = a += 0x6D2B79F5;
+              t = Math.imul(t ^ t >>> 15, t | 1);
+              t ^= t + Math.imul(t ^ t >>> 7, t | 61);
+              return ((t ^ t >>> 14) >>> 0) / 4294967296;
+            }
+        }
+
+        function getRoundedPolygonPath(points, radius = 8) {
+            if (!points || points.length < 3) return "";
+            
+            let uniquePoints = [];
+            if (points.length > 0) {
+                uniquePoints.push(points[0]);
+                for(let i=1; i<points.length; i++){
+                    const last = uniquePoints[uniquePoints.length-1];
+                    const curr = points[i];
+                    if(Math.abs(last[0]-curr[0]) > 0.001 || Math.abs(last[1]-curr[1]) > 0.001){
+                        uniquePoints.push(curr);
+                    }
+                }
+            }
+
+            if (uniquePoints.length < 3) return "";
+
+            let d = "";
+            const len = uniquePoints.length;
+            const dist = (p1, p2) => Math.sqrt(Math.pow(p2[0]-p1[0], 2) + Math.pow(p2[1]-p1[1], 2));
+            const lerp = (p1, p2, t) => [p1[0] + (p2[0]-p1[0])*t, p1[1] + (p2[1]-p1[1])*t];
+
+            for (let i = 0; i < len; i++) {
+                const curr = uniquePoints[i];
+                const next = uniquePoints[(i + 1) % len];
+                const prev = uniquePoints[(i - 1 + len) % len];
+                
+                const dPrev = dist(curr, prev);
+                const dNext = dist(curr, next);
+                
+                if (dPrev < 0.1 || dNext < 0.1) {
+                    d += (i === 0 ? "M " : "L ") + curr[0] + "," + curr[1] + " ";
+                    continue;
+                }
+                
+                const r = Math.min(radius, dPrev/2, dNext/2);
+                const start = lerp(curr, prev, r/dPrev);
+                const end = lerp(curr, next, r/dNext);
+                
+                if (i === 0) {
+                    d += `M ${start[0]},${start[1]} `;
+                } else {
+                    d += `L ${start[0]},${start[1]} `;
+                }
+                d += `Q ${curr[0]},${curr[1]} ${end[0]},${end[1]} `;
+            }
+            d += "Z";
+            return d;
+        }
+
+        // --- EXPLICIT GRID PATH STRATEGIES ---
+        function generateUPath() {
+            let p = [];
+            for(let i=0; i<5; i++) p.push([i, 0]);
+            for(let i=4; i>=0; i--) p.push([i, 1]); 
+            p.push([0,2], [1,2]);
+            p.push([1,3], [0,3]);
+            p.push([0,4], [1,4]);
+            p.push([0,5], [0,6]);
+            p.push([1,6], [1,5]);
+            p.push([2,5], [2,6]);
+            p.push([3,6], [3,5]);
+            p.push([4,5], [4,6]);
+            p.push([4,4], [3,4]);
+            p.push([3,3], [4,3]);
+            p.push([4,2], [3,2]);
+            return p;
+        }
+
+        function generateSpiralPath() {
+            let p = [];
+            for(let i=0; i<=4; i++) p.push([i, 0]);
+            for(let i=1; i<=6; i++) p.push([4, i]);
+            for(let i=3; i>=0; i--) p.push([i, 6]);
+            for(let i=5; i>=1; i--) p.push([0, i]);
+            for(let i=1; i<=3; i++) p.push([i, 1]);
+            for(let i=2; i<=5; i++) p.push([3, i]);
+            for(let i=2; i>=1; i--) p.push([i, 5]);
+            for(let i=4; i>=2; i--) p.push([1, i]);
+            return p;
+        }
+
+        // --- GENERATOR LOGIC ---
+        function generateVoronoiData(monthIndex, width, height) {
+            const cacheKey = `${monthIndex}-unified`;
+            if (voronoiCache[cacheKey]) return voronoiCache[cacheKey];
+
+            const rng = mulberry32(monthIndex * 9999 + 12345);
+            const pointCount = DAYS_IN_MONTH[monthIndex];
+            const monthName = MONTHS[monthIndex];
+            
+            // 1. DYNAMIC CENTER GHOST (Ellipse)
+            const centerOffsetX = (rng() - 0.5) * 20; 
+            const centerOffsetY = (rng() - 0.5) * 20;
+            const textCenter = [width/2 + centerOffsetX, height/2 + centerOffsetY];
+            
+            const ry = 13; 
+            const baseRx = 14;
+            const charWidth = 4.0;
+            const rx = baseRx + (monthName.length * charWidth);
+            const padding = 6; 
+
+            // 2. GRID LAYOUT
+            const cols = 5;
+            const rows = 7;
+            const cellW = width / cols;
+            const cellH = height / rows;
+            
+            const useSpiral = monthIndex % 2 === 0;
+            const pathCoords = useSpiral ? generateSpiralPath() : generateUPath();
+
+            const waveFreqX = 0.2 + rng() * 0.3;
+            const waveFreqY = 0.2 + rng() * 0.3;
+            const jitterBase = 4 + rng() * 4; 
+
+            let realPoints = [];
+
+            for (let i = 0; i < pointCount; i++) {
+                let c, r;
+                if (i < pathCoords.length) {
+                    [c, r] = pathCoords[i];
+                } else {
+                    c = i % cols;
+                    r = Math.floor(i / cols);
+                }
+
+                let x = c * cellW + cellW/2;
+                let y = r * cellH + cellH/2;
+
+                // Distortion
+                x += Math.sin(r * waveFreqY) * 6; 
+                y += Math.sin(c * waveFreqX) * 6;
+                x += (rng() - 0.5) * jitterBase;
+                y += (rng() - 0.5) * jitterBase;
+
+                // ELLIPTICAL REPULSION
+                const dx = x - textCenter[0];
+                const dy = y - textCenter[1];
+                
+                const safeRx = rx + padding;
+                const safeRy = ry + padding;
+                const nx = dx / safeRx;
+                const ny = dy / safeRy;
+                const dist = Math.sqrt(nx*nx + ny*ny);
+                
+                if (dist < 1) {
+                    const angle = Math.atan2(dy, dx);
+                    x = textCenter[0] + Math.cos(angle) * safeRx;
+                    y = textCenter[1] + Math.sin(angle) * safeRy;
+                }
+                
+                const pad = 25;
+                x = Math.max(pad, Math.min(width - pad, x));
+                y = Math.max(pad, Math.min(height - pad, y));
+
+                realPoints.push([x, y]);
+            }
+
+            // SMOOTHER GHOSTS
+            const centerGhosts = [];
+            const numGhosts = 32; 
+            for(let i=0; i<numGhosts; i++) {
+                const angle = (i / numGhosts) * Math.PI * 2;
+                centerGhosts.push([
+                    textCenter[0] + Math.cos(angle) * (rx - 2), 
+                    textCenter[1] + Math.sin(angle) * (ry - 2)
+                ]);
+            }
+            centerGhosts.push(textCenter); 
+            
+            const borderGhosts = [
+                [-width, -height], [width*2, -height], [width*2, height*2], [-width, height*2],
+                [width/2, -50], [width/2, height+50], [-50, height/2], [width+50, height/2]
+            ];
+
+            const allPoints = [...realPoints, ...centerGhosts, ...borderGhosts];
+            const delaunay = d3.Delaunay.from(allPoints);
+            const voronoi = delaunay.voronoi([0, 0, width, height]);
+
+            const cellData = [];
+            for (let i = 0; i < pointCount; i++) {
+                const polygon = voronoi.cellPolygon(i);
+                if (polygon) {
+                    const path = getRoundedPolygonPath(polygon, 8);
+                    const polyCentroid = d3.polygonCentroid(polygon);
+
+                    cellData.push({ 
+                        path, 
+                        centroid: polyCentroid, 
+                        id: i + 1 
+                    });
+                }
+            }
+
+            const result = { cells: cellData, textCenter, rx, ry };
+            voronoiCache[cacheKey] = result;
+            return result;
+        }
+
+        // --- RENDERERS ---
+
+        function renderSidebar() {
+            const list = document.getElementById('goalsList');
+            list.innerHTML = '';
+            goals.forEach(g => {
+                const isActive = g.id === currentGoalId;
+                const div = document.createElement('div');
+                div.className = `goal-item p-4 rounded-xl cursor-pointer mb-2 border-2 flex justify-between items-center group
+                    ${isActive 
+                        ? 'bg-white border-indigo-600 shadow-md' 
+                        : 'bg-white border-transparent hover:border-slate-200'}`;
+                
+                div.onclick = () => {
+                    switchGoal(g.id);
+                    if (window.innerWidth < 1024) toggleDrawer(false);
+                };
+                
+                div.innerHTML = `
+                    <div>
+                        <span class="font-bold text-sm block ${isActive ? 'text-indigo-900' : 'text-slate-600'}">${g.title}</span>
+                        <span class="text-xs text-slate-400 font-medium">${Object.keys(g.data).length} kayıt</span>
+                    </div>
+                    ${goals.length > 1 ? `
+                    <button onclick="deleteGoal(event, ${g.id})" class="opacity-0 group-hover:opacity-100 p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded transition-all">
+                        <i data-lucide="trash-2" class="w-4 h-4"></i>
+                    </button>` : ''}
+                `;
+                list.appendChild(div);
+            });
+            lucide.createIcons();
+            document.getElementById('currentGoalTitle').innerText = getCurrentGoal().title;
+            updateStats();
+        }
+
+        function renderMoodPalettes() {
+            const generateHTML = (isMobile) => {
+                return MOODS.map(m => {
+                    const isActive = selectedMood.id === m.id;
+                    const sizeClass = isMobile ? 'w-10 h-10 min-w-[2.5rem]' : 'w-7 h-7';
+                    const activeClass = isActive 
+                        ? 'ring-2 ring-offset-2 ring-slate-300 scale-110' 
+                        : 'hover:scale-105';
+                    
+                    return `
+                    <button 
+                        onclick="setMood('${m.id}')" 
+                        class="${sizeClass} rounded-full border-2 flex items-center justify-center transition-all duration-200 ${activeClass} shrink-0"
+                        style="background-color: ${m.color}; border-color: ${isActive ? 'transparent' : 'white'};"
+                        title="${m.label}"
+                    >
+                        ${isActive ? '<i data-lucide="check" class="text-white w-4 h-4 drop-shadow-sm"></i>' : ''}
+                    </button>
+                    `;
+                }).join('');
+            };
+
+            document.getElementById('desktopMoodPalette').innerHTML = generateHTML(false);
+            document.getElementById('mobileMoodPalette').innerHTML = generateHTML(true);
+            lucide.createIcons();
+        }
+
+        function setMood(moodId) {
+            selectedMood = MOODS.find(m => m.id === moodId);
+            renderMoodPalettes();
+        }
+
+        function renderYearGrid() {
+            const container = document.getElementById('yearGrid');
+            const headerTitle = document.getElementById('headerTitleContainer');
+            
+            container.innerHTML = ''; 
+            const currentGoal = getCurrentGoal();
+            const isSingleView = viewedMonthIndex !== null;
+            
+            // Get Current Date Info for "Today Only" Logic
+            const now = new Date();
+            const currentMonthIndex = now.getMonth();
+            const currentDayNumber = now.getDate();
+            
+            if (isSingleView) {
+                container.className = "flex items-center justify-center h-full p-2 lg:p-8";
+                headerTitle.classList.add('hidden', 'lg:block'); 
+            } else {
+                container.className = "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8 max-w-[1400px] mx-auto pb-20";
+                headerTitle.classList.remove('hidden', 'lg:block');
+            }
+
+            const width = 300;
+            const height = 300;
+
+            MONTHS.forEach((monthName, mIndex) => {
+                if (isSingleView && viewedMonthIndex !== mIndex) return;
+
+                const wrapper = document.createElement('div');
+                
+                if (isSingleView) {
+                    wrapper.className = "bg-white rounded-[3rem] shadow-xl border border-slate-100 relative flex items-center justify-center overflow-hidden aspect-square w-full max-w-[600px] transition-all";
+                } else {
+                    wrapper.className = "bg-white rounded-3xl shadow-sm border border-slate-100 relative flex items-center justify-center overflow-hidden aspect-square transition-all";
+                }
+                
+                const { cells, textCenter, rx, ry } = generateVoronoiData(mIndex, width, height);
+                
+                const cellMap = {};
+                cells.forEach(c => cellMap[c.id] = c);
+
+                const titleOverlay = document.createElement('div');
+                titleOverlay.className = "absolute z-10 flex flex-col items-center justify-center cursor-pointer hover:scale-110 active:scale-95 transition-transform duration-200 group";
+                titleOverlay.onclick = (e) => {
+                    e.stopPropagation();
+                    if (!isSingleView) openMonth(mIndex);
+                    else closeMonth(); 
+                };
+                
+                const leftP = (textCenter[0] / width) * 100;
+                const topP = (textCenter[1] / height) * 100;
+                const overlayScale = isSingleView ? 2 : 1;
+                
+                titleOverlay.style.left = `${leftP}%`;
+                titleOverlay.style.top = `${topP}%`;
+                titleOverlay.style.transform = "translate(-50%, -50%)";
+                titleOverlay.style.width = `${rx * 2 * overlayScale + 20}px`; 
+                titleOverlay.style.height = `${ry * 2 * overlayScale + 10}px`;
+                
+                const textSizeClass = isSingleView ? 'text-3xl md:text-5xl' : 'text-xl';
+
+                titleOverlay.innerHTML = `
+                    <div class="w-full h-full flex flex-col items-center justify-center rounded-full">
+                        <span class="${textSizeClass} font-black italic tracking-tighter uppercase text-center leading-none bg-white/70 px-2 py-1 rounded-lg backdrop-blur-sm shadow-sm border border-white/50 group-hover:bg-white/90 group-hover:border-indigo-200 transition-colors" style="font-family: 'Inter', sans-serif; color: ${TEXT_COLOR}; transform: rotate(-5deg);">
+                            ${monthName}
+                        </span>
+                        ${isSingleView ? '<span class="mt-1 text-[10px] text-slate-400 font-bold opacity-0 group-hover:opacity-100 transition-opacity bg-white px-1 rounded shadow-sm">Kapat</span>' : ''}
+                    </div>
+                `;
+                wrapper.appendChild(titleOverlay);
+
+                const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+                svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+                svg.setAttribute("class", "w-full h-full z-0");
+
+                const layerCells = document.createElementNS("http://www.w3.org/2000/svg", "g");
+                const layerLines = document.createElementNS("http://www.w3.org/2000/svg", "g");
+                const layerLabels = document.createElementNS("http://www.w3.org/2000/svg", "g");
+                
+                cells.forEach(cell => {
+                    const day = cell.id;
+                    const dataKey = `${mIndex}-${day}`;
+                    const moodId = currentGoal.data[dataKey];
+                    const mood = MOODS.find(m => m.id === moodId);
+                    const fillColor = mood ? mood.color : '#e5e7eb';
+                    
+                    // -- TODAY CHECK LOGIC --
+                    const isToday = (mIndex === currentMonthIndex && day === currentDayNumber);
+                    
+                    const group = document.createElementNS("http://www.w3.org/2000/svg", "g");
+                    // Add conditional classes based on date
+                    if (isToday) {
+                        group.setAttribute("class", "voronoi-cell-path is-today");
+                        group.onclick = () => toggleDay(mIndex, day, group);
+                    } else {
+                        group.setAttribute("class", "voronoi-cell-path is-locked");
+                    }
+
+                    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+                    path.setAttribute("d", cell.path);
+                    path.setAttribute("fill", fillColor);
+                    path.setAttribute("stroke", "#ffffff");
+                    path.setAttribute("stroke-width", "3"); 
+                    path.setAttribute("stroke-linejoin", "round"); 
+                    path.setAttribute("stroke-linecap", "round");
+                    path.setAttribute("data-day", day);
+
+                    group.appendChild(path);
+                    layerCells.appendChild(group);
+                });
+
+                const lineGroup = document.createElementNS("http://www.w3.org/2000/svg", "g");
+                lineGroup.setAttribute("id", `lines-${mIndex}`);
+                layerLines.appendChild(lineGroup);
+                
+                const getDotPos = (cell) => ({ x: cell.centroid[0] + 6, y: cell.centroid[1] - 8 });
+
+                for(let d=1; d < cells.length; d++) {
+                    const cellA = cellMap[d];
+                    const cellB = cellMap[d+1];
+                    if(!cellA || !cellB) continue;
+
+                    const keyA = `${mIndex}-${d}`;
+                    const keyB = `${mIndex}-${d+1}`;
+                    const isDoneA = !!currentGoal.data[keyA];
+                    const isDoneB = !!currentGoal.data[keyB];
+
+                    // Draw line ONLY if both are done. 
+                    // This handles "missing a day breaks the chain" visually.
+                    if (isDoneA && isDoneB) {
+                        const dotA = getDotPos(cellA);
+                        const dotB = getDotPos(cellB);
+                        
+                        const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+                        line.setAttribute("x1", dotA.x);
+                        line.setAttribute("y1", dotA.y);
+                        line.setAttribute("x2", dotB.x);
+                        line.setAttribute("y2", dotB.y);
+                        line.setAttribute("stroke", "#374151"); 
+                        line.setAttribute("stroke-width", "2");
+                        line.setAttribute("stroke-opacity", "0.6");
+                        lineGroup.appendChild(line);
+                    }
+                }
+
+                cells.forEach(cell => {
+                    const day = cell.id;
+                    const dataKey = `${mIndex}-${day}`;
+                    const moodId = currentGoal.data[dataKey];
+                    const mood = MOODS.find(m => m.id === moodId);
+                    
+                    const isFilled = mood && mood.id !== 'empty';
+                    const textColor = isFilled ? '#ffffff' : TEXT_COLOR; 
+
+                    const group = document.createElementNS("http://www.w3.org/2000/svg", "g");
+                    group.setAttribute("style", "pointer-events: none;");
+
+                    const dot = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+                    const dotPos = getDotPos(cell);
+                    dot.setAttribute("cx", dotPos.x); 
+                    dot.setAttribute("cy", dotPos.y); 
+                    dot.setAttribute("r", "2"); 
+                    dot.setAttribute("fill", "#3b82f6"); 
+                    dot.setAttribute("stroke", "#000000"); 
+                    dot.setAttribute("stroke-width", "1.5"); 
+
+                    const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
+                    text.setAttribute("x", cell.centroid[0]);
+                    text.setAttribute("y", cell.centroid[1] + 6); // Tight text offset
+                    text.setAttribute("text-anchor", "middle");
+                    text.setAttribute("dominant-baseline", "middle");
+                    text.setAttribute("font-family", "Inter, sans-serif");
+                    text.setAttribute("font-weight", "800"); 
+                    text.setAttribute("font-style", "italic");
+                    text.setAttribute("font-size", "11px"); 
+                    text.setAttribute("fill", textColor);
+                    text.setAttribute("stroke", "#ffffff");
+                    text.setAttribute("stroke-width", "2px");
+                    text.setAttribute("paint-order", "stroke"); 
+                    text.setAttribute("stroke-opacity", "0.2");
+                    text.setAttribute("data-text-day", day);
+                    
+                    text.textContent = day;
+
+                    group.appendChild(dot);
+                    group.appendChild(text);
+                    layerLabels.appendChild(group);
+                });
+
+                svg.appendChild(layerCells);
+                svg.appendChild(layerLines);
+                svg.appendChild(layerLabels);
+                wrapper.appendChild(svg);
+                container.appendChild(wrapper);
+            });
+        }
+
+        // --- DATA & LOGIC ---
+
+        function toggleDay(mIndex, day, groupElement) {
+            // Extra check for safety
+            const now = new Date();
+            const currentM = now.getMonth();
+            const currentD = now.getDate();
+            if (mIndex !== currentM || day !== currentD) return;
+
+            const key = `${mIndex}-${day}`;
+            const currentGoal = getCurrentGoal();
+            const currentMoodId = currentGoal.data[key];
+            
+            let newMoodId = null;
+
+            if (selectedMood.id === 'empty') {
+                delete currentGoal.data[key];
+            } else if (currentMoodId === selectedMood.id) {
+                delete currentGoal.data[key];
+            } else {
+                currentGoal.data[key] = selectedMood.id;
+                newMoodId = selectedMood.id;
+            }
+
+            saveGoals();
+            renderYearGrid();
+        }
+
+        function saveGoals() {
+            localStorage.setItem('voronoiGoalsV2', JSON.stringify(goals));
+        }
+
+        function getCurrentGoal() {
+            return goals.find(g => g.id === currentGoalId) || goals[0];
+        }
+
+        function switchGoal(id) {
+            currentGoalId = id;
+            renderSidebar();
+            renderYearGrid();
+        }
+
+        function deleteGoal(e, id) {
+            e.stopPropagation();
+            if(goals.length <= 1) return alert("En az bir hedef kalmalı.");
+            if(confirm("Bu hedefi ve tüm verisini silmek istiyor musun?")) {
+                goals = goals.filter(g => g.id !== id);
+                if(currentGoalId === id) currentGoalId = goals[0].id;
+                saveGoals();
+                renderSidebar();
+                renderYearGrid();
+            }
+        }
+
+        function updateStats() {
+            const c = getCurrentGoal();
+            const count = Object.keys(c.data).length;
+            document.getElementById('completedCount').innerText = `${count} Gün`;
+        }
+
+    </script>
+</body>
+</html>
