@@ -1,7 +1,7 @@
 {
   "name": "Zinciri Kırma 2026",
   "short_name": "Zinciri Kırma",
-  "start_url": "./zincirikirmav4.html",
+  "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#ffffff",
