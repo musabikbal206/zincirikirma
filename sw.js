@@ -1,9 +1,10 @@
-const CACHE_NAME = 'zinciri-kirma-v1';
+const CACHE_NAME = 'zinciri-kirma-v2'; // Incremented version to force update
 const ASSETS_TO_CACHE = [
+  './',
   './index.html',
   './icon.svg',
   './manifest.json',
-  // External CDNs (Caching these allows offline use after first load)
+  // External CDNs
   'https://cdn.tailwindcss.com',
   'https://d3js.org/d3.v7.min.js',
   'https://unpkg.com/lucide@latest',
@@ -21,7 +22,6 @@ self.addEventListener('install', (event) => {
 self.addEventListener('fetch', (event) => {
   event.respondWith(
     caches.match(event.request).then((response) => {
-      // Return cached version or fetch from network
       return response || fetch(event.request);
     })
   );
