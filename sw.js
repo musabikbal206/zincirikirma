@@ -1,6 +1,6 @@
 const CACHE_NAME = 'zinciri-kirma-v1';
 const ASSETS_TO_CACHE = [
-  './zincirikirmav4.html',
+  './index.html',
   './icon.svg',
   './manifest.json',
   // External CDNs (Caching these allows offline use after first load)
