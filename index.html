@@ -4,6 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Zinciri Kırma 2026</title>
+    
+    <!-- PWA & Favicon Links -->
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" type="image/svg+xml" href="icon.svg">
+    <link rel="apple-touch-icon" href="icon.svg">
+    <meta name="theme-color" content="#ffffff">
+    
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- D3.js for Voronoi Math -->
     <script src="https://d3js.org/d3.v7.min.js"></script>
@@ -217,7 +224,7 @@
                 <!-- Description -->
                 <div class="text-sm text-slate-600 leading-relaxed font-medium">
                     <p class="mb-3">
-                        Bu uygulama, <strong>Barış Özcan</strong>'ın popülerleştirdiği <span class="text-slate-900 font-bold">"Zinciri Kırma"</span> metodolojisi ve 2026 Voronoi Takvimi konsepti temel alınarak geliştirilmiştir.
+                        Bu uygulama, <strong>Barış Özcan</strong>'ın popülerleştirdiği <span class="text-slate-900 font-bold">"Zinciri Kırma"</span> metodolojisi ve 2025 Voronoi Takvimi konsepti temel alınarak geliştirilmiştir.
                     </p>
                     <p>
                         Her gün küçük bir adım atarak büyük hedeflere ulaşmanızı sağlayan görsel bir motivasyon aracıdır.
@@ -260,24 +267,33 @@
         // --- ICONS ---
         lucide.createIcons();
 
+        // --- REGISTER SERVICE WORKER ---
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js')
+                    .then(reg => console.log('SW Registered:', reg))
+                    .catch(err => console.log('SW Failed:', err));
+            });
+        }
+
         // --- CONFIGURATION ---
         const MONTHS = ["OCAK", "ŞUBAT", "MART", "NİSAN", "MAYIS", "HAZİRAN", "TEMMUZ", "AĞUSTOS", "EYLÜL", "EKİM", "KASIM", "ARALIK"];
         const DAYS_IN_MONTH = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
         
         // Expanded Palette
         const MOODS = [
-            { id: 'perfect',    color: '#8b5cf6', label: 'Kaygılı' },   // Violet
+            { id: 'perfect',    color: '#8b5cf6', label: 'Harika' },   // Violet
             { id: 'happy',      color: '#ec4899', label: 'Mutlu' },    // Pink
             { id: 'good',       color: '#3b82f6', label: 'İyi' },      // Blue
-            { id: 'relaxed',    color: '#06b6d4', label: 'Üzgün, Melankolik, Yorgun' },    // Cyan
+            { id: 'relaxed',    color: '#06b6d4', label: 'Sakin' },    // Cyan
             { id: 'okay',       color: '#10b981', label: 'Orta' },     // Emerald
-            { id: 'productive', color: '#84cc16', label: 'Sakin, Huzurlu, Dengeli' },  // Lime
-            { id: 'tired',      color: '#f59e0b', label: 'Mutlu, Neşeli, Enerjik' },   // Amber
+            { id: 'productive', color: '#84cc16', label: 'Üretken' },  // Lime
+            { id: 'tired',      color: '#f59e0b', label: 'Yorgun' },   // Amber
             { id: 'anxious',    color: '#f97316', label: 'Endişeli' }, // Orange
             { id: 'bad',        color: '#ef4444', label: 'Kötü' },     // Red
-            { id: 'angry',      color: '#e11d48', label: 'Öfkeli, Sinirli, Kızgın' },   // Rose
+            { id: 'angry',      color: '#e11d48', label: 'Kızgın' },   // Rose
             { id: 'bored',      color: '#64748b', label: 'Sıkkın' },   // Slate
-            { id: 'empty',      color: '#e5e7eb', label: 'Hissiz, Nötr' }       // Gray-200
+            { id: 'empty',      color: '#e5e7eb', label: 'Boş' }       // Gray-200
         ];
         
         let goals = JSON.parse(localStorage.getItem('voronoiGoalsV2')) || [
@@ -501,7 +517,6 @@
             const pointCount = DAYS_IN_MONTH[monthIndex];
             const monthName = MONTHS[monthIndex];
             
-            // 1. DYNAMIC CENTER GHOST (Ellipse)
             const centerOffsetX = (rng() - 0.5) * 20; 
             const centerOffsetY = (rng() - 0.5) * 20;
             const textCenter = [width/2 + centerOffsetX, height/2 + centerOffsetY];
@@ -539,13 +554,11 @@
                 let x = c * cellW + cellW/2;
                 let y = r * cellH + cellH/2;
 
-                // Distortion
                 x += Math.sin(r * waveFreqY) * 6; 
                 y += Math.sin(c * waveFreqX) * 6;
                 x += (rng() - 0.5) * jitterBase;
                 y += (rng() - 0.5) * jitterBase;
 
-                // ELLIPTICAL REPULSION
                 const dx = x - textCenter[0];
                 const dy = y - textCenter[1];
                 
@@ -803,7 +816,6 @@
                     const isDoneB = !!currentGoal.data[keyB];
 
                     // Draw line ONLY if both are done. 
-                    // This handles "missing a day breaks the chain" visually.
                     if (isDoneA && isDoneB) {
                         const dotA = getDotPos(cellA);
                         const dotB = getDotPos(cellB);
